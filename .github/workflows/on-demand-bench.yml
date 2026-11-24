@@ -1,0 +1,82 @@
+name: On-Demand Vala Corpus Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      vala_repo_url:
+        description: 'Vala repository URL to benchmark'
+        required: true
+        default: 'https://github.com/GNOME/vala'
+      vala_repo_branch:
+        description: 'Branch or tag to clone'
+        required: false
+        default: 'main'
+
+jobs:
+  vala-corpus-benchmark:
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout valafmt
+        uses: actions/checkout@v7
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc \
+            git \
+            meson \
+            ninja-build \
+            pkg-config \
+            valac \
+            libglib2.0-dev \
+            libtree-sitter-dev \
+            tree-sitter-cli \
+            cloc \
+            bc
+
+      - name: Build valafmt (Release Mode)
+        run: |
+          meson setup build_bench --buildtype=release
+          ninja -C build_bench
+
+      - name: Clone Target Vala Repository (${{ inputs.vala_repo_url }})
+        run: |
+          git clone --depth 1 --branch ${{ inputs.vala_repo_branch }} ${{ inputs.vala_repo_url }} target-repo
+
+      - name: Count Target Vala Lines of Code
+        run: |
+          echo "=== Target Corpus Code Metrics ==="
+          cloc target-repo --include-lang=Vala || find target-repo -name "*.vala" | wc -l
+
+      - name: Step 1 - Initial Unformatted Check (--check)
+        run: |
+          echo "=== Running initial --check scan on original Vala repository ==="
+          ./build_bench/src/valafmt -i target-repo --check || true
+
+      - name: Step 2 - Benchmark Format Execution Speed
+        run: |
+          echo "=== Timing valafmt full repository format pass ==="
+          START_TIME=$(date +%s%N)
+          ./build_bench/src/valafmt -i target-repo
+          END_TIME=$(date +%s%N)
+          
+          ELAPSED_MS=$(( (END_TIME - START_TIME) / 1000000 ))
+          ELAPSED_SEC=$(echo "scale=3; $ELAPSED_MS / 1000" | bc -l)
+          TOTAL_FILES=$(find target-repo -name "*.vala" | wc -l)
+          TOTAL_LINES=$(find target-repo -name "*.vala" -exec cat {} + | wc -l)
+          THROUGHPUT=$(echo "scale=0; $TOTAL_LINES / ($ELAPSED_MS / 1000)" | bc -l)
+          
+          echo "--------------------------------------------------"
+          echo "Benchmark Summary:"
+          echo "  - Total Vala Files:      $TOTAL_FILES"
+          echo "  - Total Lines of Code:   $TOTAL_LINES"
+          echo "  - Total Execution Time:  ${ELAPSED_SEC}s (${ELAPSED_MS} ms)"
+          echo "  - Throughput:            ${THROUGHPUT} lines/sec"
+          echo "--------------------------------------------------"
+
+      - name: Step 3 - Fixed-Point Idempotency Check (--check)
+        run: |
+          echo "=== Running post-formatting --check scan (Must pass cleanly with exit code 0) ==="
+          ./build_bench/src/valafmt -i target-repo --check

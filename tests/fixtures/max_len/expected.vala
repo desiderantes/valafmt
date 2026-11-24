@@ -1,0 +1,16 @@
+namespace Test {
+	public class MaxLenTest {
+		public void process (
+				string target_name,
+				string target_path,
+				string target_description,
+				string target_module,
+				int target_flags,
+				int extra_long_parameter_name
+		) {
+		}
+
+		public MaxLenTest () {
+		}
+	}
+}

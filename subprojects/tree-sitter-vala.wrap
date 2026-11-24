@@ -1,0 +1,5 @@
+[wrap-git]
+directory = tree-sitter-vala
+url = https://github.com/desiderantes/tree-sitter-vala.git
+revision = head
+depth = 1

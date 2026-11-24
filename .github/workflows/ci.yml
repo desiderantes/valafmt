@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc \
+            git \
+            meson \
+            ninja-build \
+            pkg-config \
+            valac \
+            libglib2.0-dev \
+            libtree-sitter-dev \
+            tree-sitter-cli
+
+      - name: Setup Build Directory
+        run: meson setup build
+
+      - name: Compile valafmt
+        run: ninja -C build
+
+      - name: Run Test Suite (Golden Fixtures, CLI & Linter)
+        run: meson test -C build --print-errorlogs
+
+      - name: Verify Installed Binary
+        run: |
+          meson install -C build --destdir /tmp/valafmt-destdir
+          /tmp/valafmt-destdir/usr/local/bin/valafmt --version
+
+      - name: Check Formatting Compliance
+        run: ./build/src/valafmt --check src tests/*.vala
+
+      - name: Check Naming Conventions (Linting)
+        run: ./build/src/valafmt --lint src tests/*.vala
